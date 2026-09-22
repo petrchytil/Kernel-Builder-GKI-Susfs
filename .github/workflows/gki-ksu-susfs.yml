@@ -517,7 +517,45 @@ jobs:
         run: |
           chmod +x scripts/fetch_manager.sh
           ./scripts/fetch_manager.sh "$VARIANT" "$GH_TOKEN" "$UPSTREAM_HASH"
+      
+      - name: Fetch Spoofed Manager APK (ReSukiSU)
+        if: inputs.root_manager == 'ReSukiSU'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          REPO="ReSukiSU/ReSukiSU"
+          HASH="${{ env.UPSTREAM_HASH }}"
 
+          RUNS=$(curl -s -H "Authorization: token $GH_TOKEN" \
+            "https://api.github.com/repos/$REPO/actions/runs?head_sha=$HASH&status=success&per_page=50")
+          RUN_IDS=$(echo "$RUNS" | jq -r '.workflow_runs[]?.id // empty')
+
+          if [ -z "$RUN_IDS" ]; then
+            echo ">>> Přesný commit nenalezen, zkouším nejnovější běhy na main..."
+            RUNS=$(curl -s -H "Authorization: token $GH_TOKEN" \
+              "https://api.github.com/repos/$REPO/actions/runs?branch=main&status=success&per_page=20")
+            RUN_IDS=$(echo "$RUNS" | jq -r '.workflow_runs[]?.id // empty')
+          fi
+
+          for ID in $RUN_IDS; do
+            ARTIFACTS=$(curl -s -H "Authorization: token $GH_TOKEN" \
+              "https://api.github.com/repos/$REPO/actions/runs/$ID/artifacts")
+            URL=$(echo "$ARTIFACTS" | jq -r '
+              .artifacts[]?
+              | select(.name | test("(?i)spoofed"))
+              | select(.name | test("(?i)(debug|gradle|armeabi-v7a|universal|x86_64)") | not)
+              | select(.expired == false)
+              | .archive_download_url' | head -n1)
+            if [ -n "$URL" ]; then
+              echo ">>> Nalezen spoofed manager v běhu $ID"
+              curl -s -L -H "Authorization: token $GH_TOKEN" -o spoofed.zip "$URL"
+              mkdir -p manager_apk
+              unzip -q -o spoofed.zip -d manager_apk/
+              rm spoofed.zip
+              break
+            fi
+          done
+      
       - name: Upload final artifact (Kernel)
         uses: actions/upload-artifact@v4
         with:
