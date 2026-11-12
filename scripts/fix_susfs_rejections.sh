@@ -74,6 +74,14 @@ if [ "${ROOT_MANAGER:-}" = "SukiSU-Ultra" ]; then
     fi
 fi
 
+# 1.5b. BakaSU / ReSukiSU: SUSFS preinit backend not implemented upstream (v4.2.0-rc3+)
+if [ "${ROOT_MANAGER:-}" = "BakaSU" ] || [ "${ROOT_MANAGER:-}" = "ReSukiSU" ]; then
+    echo ">>> BakaSU/ReSukiSU detected via ROOT_MANAGER. Disabling SUSFS preinit hooks (KSU_NO_PREINIT)..."
+    if [ -f "common/fs/exec.c" ]; then
+        sed -i '1i #define KSU_NO_PREINIT 1' common/fs/exec.c
+    fi
+fi
+
 # 1.6. Suppress -Werror,-Wunused-function in fs/susfs.c when SUS_SU / TRY_UMOUNT are disabled
 if [ -f "common/fs/susfs.c" ]; then
     echo ">>> Marking unused cred helper functions as __maybe_unused in fs/susfs.c..."
